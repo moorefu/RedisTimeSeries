@@ -35,20 +35,20 @@ ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample) {
   return Compressed_Append((CompressedChunk *)chunk, sample->timestamp, sample->value);
 }
 
-u_int64_t Compressed_ChunkNumOfSample(Chunk_t *chunk) {
+u_int64_t Compressed_ChunkNumOfSample(const Chunk_t *chunk) {
   return ((CompressedChunk *)chunk)->count;
 }
 
-timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk) {
+timestamp_t Compressed_GetFirstTimestamp(const Chunk_t *chunk) {
   return ((CompressedChunk *)chunk)->baseTimestamp;
 }
 
-timestamp_t Compressed_GetLastTimestamp(Chunk_t *chunk) {
+timestamp_t Compressed_GetLastTimestamp(const Chunk_t *chunk) {
   return ((CompressedChunk *)chunk)->prevTimestamp;
 }
 
-size_t Compressed_GetChunkSize(Chunk_t *chunk) {
-  CompressedChunk *cmpChunk = chunk;
+size_t Compressed_GetChunkSize(const Chunk_t *chunk) {
+  const CompressedChunk *cmpChunk = chunk;
   return sizeof(*cmpChunk) + cmpChunk->size * sizeof(char);
 }
 

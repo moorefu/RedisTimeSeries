@@ -25,26 +25,26 @@ static int IsChunkFull(Chunk *chunk) {
     return chunk->num_samples == chunk->max_samples;
 }
 
-u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk) {
+u_int64_t Uncompressed_NumOfSample(const Chunk_t *chunk) {
     return ((Chunk *)chunk)->num_samples;
 }
 
-static Sample *ChunkGetSampleArray(Chunk *chunk) {
+static Sample *ChunkGetSampleArray(const Chunk *chunk) {
     return chunk->samples;
 }
 
-static Sample *ChunkGetSample(Chunk *chunk, int index) {
+static Sample *ChunkGetSample(const Chunk *chunk, int index) {
     return &ChunkGetSampleArray(chunk)[index];
 }
 
-timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk) {
+timestamp_t Uncompressed_GetLastTimestamp(const Chunk_t *chunk) {
     if (((Chunk *)chunk)->num_samples == 0) {
         return -1;
     }
     return ChunkGetSample(chunk, ((Chunk *)chunk)->num_samples - 1)->timestamp;
 }
 
-timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk) {
+timestamp_t Uncompressed_GetFirstTimestamp(const Chunk_t *chunk) {
     if (((Chunk *)chunk)->num_samples == 0) {
         return -1;
     }
@@ -87,6 +87,6 @@ ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sam
     }
 }
 
-size_t Uncompressed_GetChunkSize(Chunk_t *chunk) {
+size_t Uncompressed_GetChunkSize(const Chunk_t *chunk) {
     return sizeof(Chunk) + ((Chunk *)chunk)->max_samples * sizeof(Sample);
 }

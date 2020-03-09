@@ -35,10 +35,10 @@ typedef struct ChunkFuncs {
     void(*FreeChunkIterator)(ChunkIter_t *iter);
     ChunkResult(*ChunkIteratorGetNext)(ChunkIter_t *iter, Sample *sample);
 
-    size_t(*GetChunkSize)(Chunk_t *chunk);
-    u_int64_t(*GetNumOfSample)(Chunk_t *chunk);
-    u_int64_t(*GetLastTimestamp)(Chunk_t *chunk);
-    u_int64_t(*GetFirstTimestamp)(Chunk_t *chunk);
+    size_t(*GetChunkSize)(const Chunk_t *chunk);
+    u_int64_t(*GetNumOfSample)(const Chunk_t *chunk);
+    u_int64_t(*GetLastTimestamp)(const Chunk_t *chunk);
+    u_int64_t(*GetFirstTimestamp)(const Chunk_t *chunk);
 } ChunkFuncs;
 
 ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkClass);

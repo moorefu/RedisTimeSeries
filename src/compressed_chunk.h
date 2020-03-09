@@ -24,10 +24,10 @@ ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk);
 ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample* sample);
 
 // Miscellaneous
-size_t Compressed_GetChunkSize(Chunk_t *chunk);
-u_int64_t Compressed_ChunkNumOfSample (Chunk_t *chunk);
-timestamp_t Compressed_GetFirstTimestamp(Chunk_t *chunk);
-timestamp_t Compressed_GetLastTimestamp (Chunk_t *chunk);
+size_t Compressed_GetChunkSize(const Chunk_t *chunk);
+u_int64_t Compressed_ChunkNumOfSample (const Chunk_t *chunk);
+timestamp_t Compressed_GetFirstTimestamp(const Chunk_t *chunk);
+timestamp_t Compressed_GetLastTimestamp (const Chunk_t *chunk);
 
 /* Used in tests */
 u_int64_t getIterIdx(Chunk_t *iter);

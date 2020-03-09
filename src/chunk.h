@@ -26,13 +26,13 @@ typedef struct ChunkIterator {
 
 Chunk_t *Uncompressed_NewChunk(size_t sampleCount);
 void Uncompressed_FreeChunk(Chunk_t *chunk);
-size_t Uncompressed_GetChunkSize(Chunk_t *chunk);
+size_t Uncompressed_GetChunkSize(const Chunk_t *chunk);
 
 // 0 for failure, 1 for success
 ChunkResult Uncompressed_AddSample(Chunk_t *chunk, Sample *sample);
-u_int64_t Uncompressed_NumOfSample(Chunk_t *chunk);
-timestamp_t Uncompressed_GetLastTimestamp(Chunk_t *chunk);
-timestamp_t Uncompressed_GetFirstTimestamp(Chunk_t *chunk);
+u_int64_t Uncompressed_NumOfSample(const Chunk_t *chunk);
+timestamp_t Uncompressed_GetLastTimestamp(const Chunk_t *chunk);
+timestamp_t Uncompressed_GetFirstTimestamp(const Chunk_t *chunk);
 
 ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk);
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
