@@ -102,7 +102,8 @@ _SOURCES=\
 	module.c \
 	parse_policies.c \
 	rdb.c \
-	tsdb.c
+	tsdb.c \
+	common.c
 
 _TEST_SOURCES=\
 	tests.c \

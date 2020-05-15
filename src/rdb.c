@@ -8,9 +8,11 @@
 #include "rdb.h"
 #include "consts.h"
 
+#define EOF_MARKER 0xFFFFFFFF
+
 void *series_rdb_load(RedisModuleIO *io, int encver)
 {
-    if (encver != TS_ENC_VER && encver != TS_UNCOMPRESSED_VER) {
+    if (encver < TS_ENC_VER && encver > TS_DYNAMIC_SAMPLES) {
         RedisModule_LogIOError(io, "error", "data is not in the correct encoding");
         return NULL;
     }
@@ -57,13 +59,30 @@ void *series_rdb_load(RedisModuleIO *io, int encver)
         lastRule = rule;
     }
 
-    uint64_t samplesCount = RedisModule_LoadUnsigned(io);
-    for (size_t sampleIndex = 0; sampleIndex < samplesCount; sampleIndex++) {
-        timestamp_t ts = RedisModule_LoadUnsigned(io);
-        double val = RedisModule_LoadDouble(io);
-        int result = SeriesAddSample(series, ts, val);
-        if (result != TSDB_OK) {
-            RedisModule_LogIOError(io, "warning", "couldn't load sample: %ld %lf", ts, val);
+    if (encver < TS_DYNAMIC_SAMPLES){
+        uint64_t samplesCount = RedisModule_LoadUnsigned(io);
+        for (size_t sampleIndex = 0; sampleIndex < samplesCount; sampleIndex++) {
+            timestamp_t ts = RedisModule_LoadUnsigned(io);
+            double val = RedisModule_LoadDouble(io);
+            int result = SeriesAddSample(series, ts, val);
+            if (result != TSDB_OK) {
+                RedisModule_LogIOError(io, "warning", "couldn't load sample: %ld %lf", ts, val);
+            }
+        }
+    } else {
+        while (true)
+        {
+            timestamp_t ts = RedisModule_LoadUnsigned(io);
+            double val = RedisModule_LoadDouble(io);
+
+            if (ts == EOF_MARKER && val == EOF_MARKER) {
+                break;
+            }
+
+            int result = SeriesAddSample(series, ts, val);
+            if (result != TSDB_OK) {
+                RedisModule_LogIOError(io, "warning", "couldn't load sample: %ld %lf", ts, val);
+            }
         }
     }
 
@@ -107,14 +126,15 @@ void series_rdb_save(RedisModuleIO *io, void *value)
         rule = rule->nextRule;
     }
 
-    size_t numSamples = SeriesGetNumSamples(series);
-    RedisModule_SaveUnsigned(io, numSamples);
-
     SeriesIterator iter = SeriesQuery(series, 0, series->lastTimestamp, false);
     Sample sample;
     while (SeriesIteratorGetNext(&iter, &sample) == CR_OK) {
         RedisModule_SaveUnsigned(io, sample.timestamp);
         RedisModule_SaveDouble(io, sample.value);
     }
+
+    RedisModule_SaveUnsigned(io, EOF_MARKER);
+    RedisModule_SaveDouble(io, EOF_MARKER);
+
     SeriesIteratorClose(&iter);
 }

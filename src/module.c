@@ -34,9 +34,6 @@ static int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t
 static void ReplyWithSeriesLabels(RedisModuleCtx *ctx, const Series *series);
 static void ReplyWithSeriesLastDatapoint(RedisModuleCtx *ctx, const Series *series);
 
-static u_int64_t max(u_int64_t a, u_int64_t b) {
-    return a > b ? a : b;
-}
 
 static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label_count, Label **labels) {
     int pos = RMUtil_ArgIndex("LABELS", argv, argc);
@@ -47,7 +44,7 @@ static int parseLabelsFromArgs(RedisModuleString **argv, int argc, size_t *label
         *labels = NULL;
         return REDISMODULE_OK;
     }
-    *label_count = (size_t)(max(0, (argc - first_label_pos) / 2 ));
+    *label_count = (size_t)(RTS_max(0, (argc - first_label_pos) / 2 ));
     if (*label_count > 0) {
     	labelsResult = malloc(sizeof(Label) * (*label_count));
         for (int i=0; i < *label_count; i++) {
@@ -534,21 +531,12 @@ int ReplySeriesRange(RedisModuleCtx *ctx, Series *series, api_timestamp_t start_
     long long arraylen = 0;
     timestamp_t last_agg_timestamp;
 
-    // In case a retention is set shouldn't return chunks older than the retention
-    // TODO: move to parseRangeArguments(?)
-    if(series->retentionTime){
-    	start_ts = series->lastTimestamp > series->retentionTime ?
-    			max(start_ts, series->lastTimestamp - series->retentionTime) : start_ts;
-        // if new start_ts > end_ts, there are no results to return
-        if (start_ts > end_ts) {
-            return RedisModule_ReplyWithArray(ctx, 0);
-        }
+    // if new start_ts > end_ts, there are no results to return
+    if (start_ts > end_ts) {
+        return RedisModule_ReplyWithArray(ctx, 0);
     }
 
     SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, rev);
-    if (iterator.series == NULL) { 
-        return RedisModule_ReplyWithArray(ctx, 0);
-    }
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
     if (aggObject == TS_AGG_NONE) {
@@ -1117,7 +1105,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
             .free = FreeSeries
         };
 
-    SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_UNCOMPRESSED_VER, &tm);
+    SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_DYNAMIC_SAMPLES, &tm);
     if (SeriesType == NULL) return REDISMODULE_ERR;
     IndexInit();
     RMUtil_RegisterWriteDenyOOMCmd(ctx, "ts.create", TSDB_create);

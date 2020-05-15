@@ -193,6 +193,8 @@ size_t SeriesMemUsage(const void *value) {
             SeriesGetChunksSize(series);
 }
 
+// This function might return a larger number of samples then what you would be able to query using SeriesQuery due to
+// retention.
 size_t SeriesGetNumSamples(const Series *series) {
     size_t numSamples = 0;
     if (series!=NULL){
@@ -229,6 +231,12 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
 // Initiates SeriesIterator, find the correct chunk and initiate a ChunkIterator
 SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev) {
     SeriesIterator iter = { 0 };
+    // In case a retention is set shouldn't return chunks older than the retention
+    if(series->retentionTime){
+        start_ts = series->lastTimestamp > series->retentionTime ?
+                   RTS_max(start_ts, series->lastTimestamp - series->retentionTime) : start_ts;
+    }
+
     iter.series = series;
     iter.minTimestamp = start_ts;
     iter.maxTimestamp = end_ts;
@@ -254,7 +262,6 @@ SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end
         RedisModule_DictIteratorStop(iter.dictIter);
         return (SeriesIterator) {0};
     }
-
     iter.chunkIterator = funcs->NewChunkIterator(iter.currentChunk, iter.reverse);
     return iter;
 }
@@ -270,6 +277,9 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
     ChunkResult res;
     ChunkFuncs *funcs = iterator->series->funcs;
     Chunk_t *currentChunk = iterator->currentChunk;
+    if (iterator->series == NULL) {
+        return CR_ERR;
+    }
 
     while (true) {
         res = iterator->GetNext(iterator->chunkIterator, currentSample);
