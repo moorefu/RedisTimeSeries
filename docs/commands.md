@@ -73,6 +73,7 @@ These arguments are optional because they can be set by TS.CREATE:
     * When set to 0, the series is not trimmed at all
  * labels - Set of label-value pairs that represent metadata labels of the key
  * UNCOMPRESSED - Changes data storage from compressed (by default) to uncompressed
+ * OUT_OF_ORDER - Allows insertion and updating of past samples. Down-sampled rules are not updated
 
 If this command is used to add data to an existing timeseries, `retentionTime` and `labels` are ignored.
 
