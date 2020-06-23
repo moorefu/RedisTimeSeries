@@ -12,6 +12,10 @@
 #include <stdio.h>          // printf
 #include "consts.h"
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 typedef struct Sample {
     u_int64_t timestamp;
     double value;
@@ -43,5 +47,9 @@ typedef struct ChunkFuncs {
 } ChunkFuncs;
 
 ChunkFuncs *GetChunkClass(CHUNK_TYPES_T chunkClass);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif //GENERIC__CHUNK_H

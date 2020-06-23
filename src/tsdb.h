@@ -12,6 +12,10 @@
 #include "indexer.h"
 #include "generic_chunk.h"
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 typedef struct CompactionRule {
     RedisModuleString *destKey;
     timestamp_t timeBucket;
@@ -72,4 +76,9 @@ ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSampl
 void SeriesIteratorClose(SeriesIterator *iterator);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* TSDB_H */

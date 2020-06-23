@@ -13,11 +13,21 @@
 #include "rmutil/util.h"
 #include <rmutil/alloc.h>
 
-static const timestamp_t lookup_intervals[] = { ['m'] = 1,
-                                                ['s'] = 1000,
-                                                ['M'] = 1000 * 60,
-                                                ['h'] = 1000 * 60 * 60,
-                                                ['d'] = 1000 * 60 * 60 * 24 };
+enum interval_type {
+    m,
+    s,
+    M,
+    h,
+    d,
+    
+};
+
+static const timestamp_t lookup_intervals[] = { 1, // ['m']
+                                                1000, // ['s']
+                                                1000 * 60, // ['M']
+                                                1000 * 60 * 60, // ['h']
+                                                1000 * 60 * 60 * 24 // ['d'] 
+                                                };
 
 static int parse_string_to_millisecs(const char *timeStr, timestamp_t *out) {
     char should_be_empty;

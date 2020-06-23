@@ -9,6 +9,10 @@
 #include <sys/types.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct SimpleCompactionRule {
     uint64_t timeBucket;
     uint64_t retentionSizeMillisec;
@@ -16,4 +20,9 @@ typedef struct SimpleCompactionRule {
 } SimpleCompactionRule;
 
 int ParseCompactionPolicy(const char * policy_string, SimpleCompactionRule **parsed_rules, uint64_t *count_rules);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

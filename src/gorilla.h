@@ -12,6 +12,10 @@
 #include "consts.h"
 #include "generic_chunk.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef u_int64_t timestamp_t;
 typedef u_int64_t binary_t;
 typedef u_int64_t globalbit_t;
@@ -58,5 +62,9 @@ typedef struct Compressed_Iterator {
 
 ChunkResult Compressed_Append(CompressedChunk *chunk, u_int64_t timestamp, double value);
 ChunkResult Compressed_ReadNext(Compressed_Iterator *iter, u_int64_t *timestamp, double *value);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

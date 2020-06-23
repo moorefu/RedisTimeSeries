@@ -33,6 +33,7 @@ static int ReplySeriesRange(RedisModuleCtx *ctx,
                             api_timestamp_t start_ts,
                             api_timestamp_t end_ts,
                             AggregationClass *aggObject,
+                            int aggType,
                             int64_t time_delta,
                             long long maxResults,
                             bool rev);
@@ -191,11 +192,10 @@ static int parseAggregationArgs(RedisModuleCtx *ctx,
                                 RedisModuleString **argv,
                                 int argc,
                                 api_timestamp_t *time_delta,
-                                AggregationClass **agg_object) {
-    int agg_type;
-    int result = _parseAggregationArgs(ctx, argv, argc, time_delta, &agg_type);
+                                AggregationClass **agg_object, int *agg_type) {
+    int result = _parseAggregationArgs(ctx, argv, argc, time_delta, agg_type);
     if (result == TSDB_OK) {
-        *agg_object = GetAggClass(agg_type);
+        *agg_object = GetAggClass(*agg_type);
         if (*agg_object == NULL) {
             RedisModule_ReplyWithError(ctx, "TSDB: Failed to retrieve aggregation class");
             return TSDB_ERROR;
@@ -459,7 +459,8 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
     }
 
     AggregationClass *aggObject = NULL;
-    const int aggregationResult = parseAggregationArgs(ctx, argv, argc, &time_delta, &aggObject);
+    int aggType = TS_AGG_NONE;
+    const int aggregationResult = parseAggregationArgs(ctx, argv, argc, &time_delta, &aggObject, &aggType);
     if (aggregationResult == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }
@@ -516,7 +517,7 @@ int TSDB_generic_mrange(RedisModuleCtx *ctx, RedisModuleString **argv, int argc,
         } else {
             RedisModule_ReplyWithArray(ctx, 0);
         }
-        ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count, rev);
+        ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, aggType, time_delta, count, rev);
         replylen++;
         RedisModule_CloseKey(key);
     }
@@ -560,12 +561,13 @@ int TSDB_generic_range(RedisModuleCtx *ctx, RedisModuleString **argv, int argc, 
     }
 
     AggregationClass *aggObject = NULL;
-    int aggregationResult = parseAggregationArgs(ctx, argv, argc, &time_delta, &aggObject);
+    int aggType = TS_AGG_NONE;
+    const int aggregationResult = parseAggregationArgs(ctx, argv, argc, &time_delta, &aggObject, &aggType);
     if (aggregationResult == TSDB_ERROR) {
         return REDISMODULE_ERR;
     }
 
-    ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, time_delta, count, rev);
+    ReplySeriesRange(ctx, series, start_ts, end_ts, aggObject, aggType, time_delta, count, rev);
 
     RedisModule_CloseKey(key);
     return REDISMODULE_OK;
@@ -584,6 +586,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
                      api_timestamp_t start_ts,
                      api_timestamp_t end_ts,
                      AggregationClass *aggObject,
+                     int aggType,
                      int64_t time_delta,
                      long long maxResults,
                      bool rev) {
@@ -610,7 +613,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
     }
 
     RedisModule_ReplyWithArray(ctx, REDISMODULE_POSTPONED_ARRAY_LEN);
-    if (aggObject == TS_AGG_NONE) {
+    if (aggType == TS_AGG_NONE) {
         // No aggregation
         while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK &&
                (maxResults == -1 || arraylen < maxResults)) {
@@ -644,7 +647,7 @@ int ReplySeriesRange(RedisModuleCtx *ctx,
     }
     SeriesIteratorClose(&iterator);
 
-    if (aggObject != TS_AGG_NONE) {
+    if (aggType != TS_AGG_NONE) {
         if (arraylen != maxResults) {
             // reply last bucket of data
             ReplyWithSample(ctx, last_agg_timestamp, aggObject->finalize(context));
@@ -1274,6 +1277,7 @@ int RedisModule_OnLoad(RedisModuleCtx *ctx, RedisModuleString **argv, int argc) 
                                   .rdb_save = series_rdb_save,
                                   .aof_rewrite = RMUtil_DefaultAofRewrite,
                                   .mem_usage = SeriesMemUsage,
+                                  .digest = NULL,
                                   .free = FreeSeries };
 
     SeriesType = RedisModule_CreateDataType(ctx, "TSDB-TYPE", TS_UNCOMPRESSED_VER, &tm);

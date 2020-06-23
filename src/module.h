@@ -9,6 +9,10 @@
 #include "redismodule.h"
 #include "tsdb.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern RedisModuleType *SeriesType;
 
 // Create a new TS key, if key is NULL the function will open the key, the user must call to RedisModule_CloseKey
@@ -17,5 +21,9 @@ int CreateTsKey(RedisModuleCtx *ctx, RedisModuleString *keyName, Label *labels, 
                 long long retentionTime, long long maxSamplesPerChunk, int compressed, Series **series, RedisModuleKey **key);
 
 int GetSeries(RedisModuleCtx *ctx, RedisModuleString *keyName, RedisModuleKey **key, Series **serie, int mode);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

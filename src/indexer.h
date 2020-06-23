@@ -9,6 +9,10 @@
 #include <sys/types.h>
 #include "redismodule.h"
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 typedef struct {
     RedisModuleString *key;
     RedisModuleString *value;
@@ -41,4 +45,9 @@ void RemoveIndexedMetric(RedisModuleCtx *ctx, RedisModuleString *ts_key, Label *
 RedisModuleDict *QueryIndex(RedisModuleCtx *ctx, QueryPredicate *index_predicate, size_t predicate_count);
 int parsePredicate(RedisModuleCtx *ctx, RedisModuleString *label, QueryPredicate *retQuery, const char *separator);
 int CountPredicateType(QueryPredicate *queries, size_t query_count, PredicateType type);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

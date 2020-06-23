@@ -12,6 +12,10 @@
 #include "gorilla.h"
 #include "generic_chunk.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Initialize compressed chunk
 Chunk_t *Compressed_NewChunk(size_t size);
 void Compressed_FreeChunk(Chunk_t *chunk);
@@ -32,5 +36,9 @@ timestamp_t Compressed_GetLastTimestamp (Chunk_t *chunk);
 
 /* Used in tests */
 u_int64_t getIterIdx(ChunkIter_t *iter);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // COMPRESSED_CHUNK_H

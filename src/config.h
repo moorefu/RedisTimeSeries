@@ -10,6 +10,9 @@
 #include "parse_policies.h"
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 typedef struct {
     SimpleCompactionRule *compactionRules;
     uint64_t compactionRulesCount;
@@ -41,4 +44,9 @@ static inline int RTS_IsEnterprise() { return RTS_RlecMajorVersion != -1; }
 
 int RTS_CheckSupportedVestion();
 void RTS_GetRedisVersion();
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

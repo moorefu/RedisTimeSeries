@@ -10,6 +10,10 @@
 #include "generic_chunk.h"
 #include <sys/types.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct Chunk {
     timestamp_t base_timestamp;
     Sample *samples;
@@ -39,5 +43,9 @@ ChunkIter_t *Uncompressed_NewChunkIterator(Chunk_t *chunk, bool rev);
 ChunkResult Uncompressed_ChunkIteratorGetNext(ChunkIter_t *iterator, Sample *sample);
 ChunkResult Uncompressed_ChunkIteratorGetPrev(ChunkIter_t *iterator, Sample *sample);
 void Uncompressed_FreeChunkIterator(ChunkIter_t *iter, bool freeChunk);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
