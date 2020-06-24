@@ -12,7 +12,6 @@
 #include "indexer.h"
 #include "generic_chunk.h"
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif

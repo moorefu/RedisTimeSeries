@@ -51,7 +51,8 @@ SDK_DIR=$(ROOT)/deps/RedisModulesSDK
 RMUTIL_LIBDIR=$(BINROOT)/rmutil
 LIBRMUTIL=$(RMUTIL_LIBDIR)/librmutil.a
 
-LIBBENCHMARK_DIR=$(ROOT)/deps/benchmark/build
+LIBBENCHMARK_BUILD_DIR=$(ROOT)/deps/benchmark/build
+LIBBENCHMARK_DIR=$(BINROOT)/libbenchmark
 LIBBENCHMARK=$(BINROOT)/libbenchmark.a
 
 #----------------------------------------------------------------------------------------------
@@ -76,8 +77,24 @@ CC_FLAGS = \
 	-DREDISTIMESERIES_GIT_SHA=\"$(GIT_SHA)\" \
 	-DREDISMODULE_EXPERIMENTAL_API
 
+BENCHMARK_CC_FLAGS = \
+	-std=c++11 -I $(BINROOT) \
+	-I$(SDK_DIR) \
+	-Wall \
+	-fPIC \
+	-fpermissive \
+	-pthread \
+	-pedantic \
+	-MMD -MF $(@:.o=.d) \
+	-include $(SRCDIR)/common.h \
+	-DREDIS_MODULE_TARGET \
+	-DREDISTIMESERIES_GIT_SHA=\"$(GIT_SHA)\" \
+	-DREDISMODULE_EXPERIMENTAL_API
+
 LD_FLAGS += 
 LD_LIBS += -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil
+BENCHMARK_LD_LIBS += $(LIBBENCHMARK) -lc -lm -L$(RMUTIL_LIBDIR) -lrmutil -L$(LIBBENCHMARK_DIR) -lstdc++ -pthread
+
 
 ifeq ($(OS),linux)
 SO_LD_FLAGS += -shared -Bsymbolic $(LD_FLAGS)
@@ -141,9 +158,10 @@ $(LIBRMUTIL): rmutil
 
 libbenchmark:
 	@echo Building $@...
-	mkdir -p $(LIBBENCHMARK_DIR) && cd $(LIBBENCHMARK_DIR) && cmake .. -DBENCHMARK_ENABLE_GTEST_TESTS=OFF -DBENCHMARK_DOWNLOAD_DEPENDENCIES=ON
-	$(SHOW)$(MAKE) -C $(LIBBENCHMARK_DIR)
-	cp $(LIBBENCHMARK_DIR)/src/libbenchmark.a $(LIBBENCHMARK)
+	mkdir -p $(LIBBENCHMARK_BUILD_DIR) && cd $(LIBBENCHMARK_BUILD_DIR) && cmake .. -DBENCHMARK_ENABLE_GTEST_TESTS=OFF -DBENCHMARK_DOWNLOAD_DEPENDENCIES=ON
+	$(SHOW)$(MAKE) -C $(LIBBENCHMARK_BUILD_DIR)
+	mkdir -p $(LIBBENCHMARK_DIR)
+	cp $(LIBBENCHMARK_BUILD_DIR)/src/libbenchmark.a $(LIBBENCHMARK_DIR)
 
 $(LIBBENCHMARK): libbenchmark
 
@@ -158,7 +176,7 @@ format:
 	clang-format -i $(SOURCES)
 
 distclean: clean
-	$(SHOW)$(MAKE) -C $(LIBBENCHMARK_DIR) clean
+	$(SHOW)$(MAKE) -C $(LIBBENCHMARK_BUILD_DIR) clean
 
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
@@ -212,12 +230,12 @@ unittests: $(UNITTESTS_RUNNER)
 #----------------------------------------------------------------------------------------------
 
 basic: $(LIBBENCHMARK) $(LIBRMUTIL) basic.o
-	$(SHOW)$(CXX) basic.o $(LIBBENCHMARK) $(OBJECTS) $(LD_LIBS) -lstdc++ -lm -pthread -o basic
+	$(SHOW)$(CXX) basic.o $(BENCHMARK_LD_LIBS) -o basic
 
 basic.o: $(OBJECTS) $(LIBRMUTIL) basic.cpp
-	$(SHOW)$(CXX) -std=c++11 -I $(BINROOT) -pthread -c basic.cpp -o basic.o $(LD_LIBS)
+	$(SHOW)$(CXX) $(BENCHMARK_CC_FLAGS) -c basic.cpp $(OBJECTS) -o basic.o 
 
-microbenchmarks: basic 
+microbenchmarks: basic
 	sudo cpupower frequency-set --governor performance
 	./basic
 	sudo cpupower frequency-set --governor powersave
