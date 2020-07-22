@@ -1,25 +1,49 @@
 /*
-* Copyright 2018-2019 Redis Labs Ltd. and Contributors
-*
-* This file is available under the Redis Labs Source Available License Agreement
-*/
-#include <time.h>
-#include <string.h>
-#include <redismodule.h>
+ * Copyright 2018-2019 Redis Labs Ltd. and Contributors
+ *
+ * This file is available under the Redis Labs Source Available License Agreement
+ */
+#include "tsdb.h"
+
+#include "config.h"
+#include "consts.h"
+#include "endianconv.h"
+#include "indexer.h"
+#include "module.h"
+
+#include <math.h>
 #include "rmutil/logging.h"
 #include "rmutil/strings.h"
-#include "rmutil/alloc.h"
-#include "tsdb.h"
-#include "module.h"
-#include "config.h"
-#include "indexer.h"
-#include "endianconv.h"
 
-static Series* lastDeletedSeries = NULL;
-
-Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount, uint64_t retentionTime,
-        short maxSamplesPerChunk, int uncompressed)
+typedef enum
 {
+    DICT_OP_SET = 0,
+    DICT_OP_REPLACE = 1,
+    DICT_OP_DEL = 2
+} DictOp;
+
+static Series *lastDeletedSeries = NULL;
+
+static int dictOperator(RedisModuleDict *d, void *chunk, timestamp_t ts, DictOp op) {
+    timestamp_t rax_key = htonu64(ts);
+    switch (op) {
+        case DICT_OP_SET:
+            return RedisModule_DictSetC(d, &rax_key, sizeof(rax_key), chunk);
+        case DICT_OP_REPLACE:
+            return RedisModule_DictReplaceC(d, &rax_key, sizeof(rax_key), chunk);
+        case DICT_OP_DEL:
+            return RedisModule_DictDelC(d, &rax_key, sizeof(rax_key), NULL);
+    }
+    chunk = NULL;
+    return REDISMODULE_OK; // silence compiler
+}
+
+Series *NewSeries(RedisModuleString *keyName,
+                  Label *labels,
+                  size_t labelsCount,
+                  uint64_t retentionTime,
+                  short maxSamplesPerChunk,
+                  int options) {
     Series *newSeries = (Series *)malloc(sizeof(Series));
     newSeries->keyName = keyName;
     newSeries->chunks = RedisModule_CreateDict(NULL);
@@ -32,21 +56,20 @@ Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
     newSeries->totalSamples = 0;
     newSeries->labels = labels;
     newSeries->labelsCount = labelsCount;
-    newSeries->options = 0;
-    if (uncompressed & SERIES_OPT_UNCOMPRESSED) {
+    newSeries->options = options;
+    if (newSeries->options & SERIES_OPT_UNCOMPRESSED) {
         newSeries->options |= SERIES_OPT_UNCOMPRESSED;
         newSeries->funcs = GetChunkClass(CHUNK_REGULAR);
     } else {
         newSeries->funcs = GetChunkClass(CHUNK_COMPRESSED);
     }
     Chunk_t *newChunk = newSeries->funcs->NewChunk(newSeries->maxSamplesPerChunk);
-    RedisModule_DictSetC(newSeries->chunks, (void*)&newSeries->lastTimestamp, sizeof(newSeries->lastTimestamp),
-                        (void*)newChunk);
+    dictOperator(newSeries->chunks, newChunk, 0, DICT_OP_SET);
     newSeries->lastChunk = newChunk;
     return newSeries;
 }
 
-void SeriesTrim(Series * series) {
+void SeriesTrim(Series *series) {
     if (series->retentionTime == 0) {
         return;
     }
@@ -56,13 +79,15 @@ void SeriesTrim(Series * series) {
     Chunk_t *currentChunk;
     void *currentKey;
     size_t keyLen;
-    timestamp_t minTimestamp = series->lastTimestamp > series->retentionTime ?
-    		series->lastTimestamp - series->retentionTime : 0;
+    timestamp_t minTimestamp = series->lastTimestamp > series->retentionTime
+                                   ? series->lastTimestamp - series->retentionTime
+                                   : 0;
 
-    while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void*)&currentChunk))) {
+    while ((currentKey = RedisModule_DictNextC(iter, &keyLen, (void *)&currentChunk))) {
         if (series->funcs->GetLastTimestamp(currentChunk) < minTimestamp) {
             RedisModule_DictDelC(series->chunks, currentKey, keyLen, NULL);
-            // reseek iterator since we modified the dict, go to first element that is bigger than current key
+            // reseek iterator since we modified the dict,
+            // go to first element that is bigger than current key
             RedisModule_DictIteratorReseekC(iter, ">", currentKey, keyLen);
 
             series->totalSamples -= series->funcs->GetNumOfSample(currentChunk);
@@ -82,7 +107,7 @@ static void seriesEncodeTimestamp(void *buf, timestamp_t timestamp) {
 }
 
 void freeLastDeletedSeries() {
-    if(lastDeletedSeries == NULL){
+    if (lastDeletedSeries == NULL) {
         return;
     }
     CompactionRule *rule = lastDeletedSeries->rules;
@@ -91,7 +116,7 @@ void freeLastDeletedSeries() {
         FreeCompactionRule(rule);
         rule = nextRule;
     }
-    if(lastDeletedSeries->srcKey != NULL) {
+    if (lastDeletedSeries->srcKey != NULL) {
         RedisModule_FreeString(NULL, lastDeletedSeries->srcKey);
     }
     RedisModule_FreeString(NULL, lastDeletedSeries->keyName);
@@ -99,13 +124,15 @@ void freeLastDeletedSeries() {
     lastDeletedSeries = NULL;
 }
 
-void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key){
-    if(lastDeletedSeries != NULL && RedisModule_StringCompare(lastDeletedSeries->keyName, key) == 0) {
+void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key) {
+    if (lastDeletedSeries != NULL &&
+        RedisModule_StringCompare(lastDeletedSeries->keyName, key) == 0) {
         CompactionRule *rule = lastDeletedSeries->rules;
         while (rule != NULL) {
             RedisModuleKey *seriesKey;
             Series *dstSeries;
-            const int status = GetSeries(ctx, rule->destKey, &seriesKey, &dstSeries, REDISMODULE_READ|REDISMODULE_WRITE);
+            const int status = GetSeries(
+                ctx, rule->destKey, &seriesKey, &dstSeries, REDISMODULE_READ | REDISMODULE_WRITE);
             if (status) {
                 SeriesDeleteSrcRule(dstSeries, lastDeletedSeries->keyName);
                 RedisModule_CloseKey(seriesKey);
@@ -115,7 +142,11 @@ void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key){
         if (lastDeletedSeries->srcKey) {
             RedisModuleKey *seriesKey;
             Series *srcSeries;
-            const int status = GetSeries(ctx, lastDeletedSeries->srcKey, &seriesKey, &srcSeries, REDISMODULE_READ|REDISMODULE_WRITE);
+            const int status = GetSeries(ctx,
+                                         lastDeletedSeries->srcKey,
+                                         &seriesKey,
+                                         &srcSeries,
+                                         REDISMODULE_READ | REDISMODULE_WRITE);
             if (status) {
                 SeriesDeleteRule(srcSeries, lastDeletedSeries->keyName);
                 RedisModule_CloseKey(seriesKey);
@@ -127,17 +158,18 @@ void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key){
 
 // Releases Series and all its compaction rules
 void FreeSeries(void *value) {
-    Series *currentSeries = (Series *) value;
+    Series *currentSeries = (Series *)value;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(currentSeries->chunks, "^", NULL, 0);
     Chunk_t *currentChunk;
-    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk) != NULL){
+    while (RedisModule_DictNextC(iter, NULL, (void *)&currentChunk) != NULL) {
         currentSeries->funcs->FreeChunk(currentChunk);
     }
     RedisModule_DictIteratorStop(iter);
 
     RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
     RedisModule_AutoMemory(ctx);
-    RemoveIndexedMetric(ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
+    RemoveIndexedMetric(
+        ctx, currentSeries->keyName, currentSeries->labels, currentSeries->labelsCount);
 
     FreeLabels(currentSeries->labels, currentSeries->labelsCount);
 
@@ -149,18 +181,18 @@ void FreeSeries(void *value) {
 }
 
 void FreeCompactionRule(void *value) {
-	CompactionRule *rule = (CompactionRule *) value;
-	RedisModule_FreeString(NULL, rule->destKey);
-	((AggregationClass *)rule->aggClass)->freeContext(rule->aggContext);
-	free(rule);
+    CompactionRule *rule = (CompactionRule *)value;
+    RedisModule_FreeString(NULL, rule->destKey);
+    ((AggregationClass *)rule->aggClass)->freeContext(rule->aggContext);
+    free(rule);
 }
 
 size_t SeriesGetChunksSize(const Series *series) {
     size_t size = 0;
     Chunk_t *currentChunk;
     RedisModuleDictIter *iter = RedisModule_DictIteratorStartC(series->chunks, "^", NULL, 0);
-    while (RedisModule_DictNextC(iter, NULL, (void*)&currentChunk)) {
-        size += series->funcs->GetChunkSize(currentChunk);
+    while (RedisModule_DictNextC(iter, NULL, (void *)&currentChunk)) {
+        size += series->funcs->GetChunkSize(currentChunk, true);
     }
     RedisModule_DictIteratorStop(iter);
     return size;
@@ -182,41 +214,136 @@ size_t SeriesMemUsage(const void *value) {
     CompactionRule *rule = series->rules;
     while (rule != NULL) {
         rulesSize += sizeof(CompactionRule);
-        rule = rule->nextRule; 
+        rule = rule->nextRule;
     }
 
-    return  sizeof(series) + 
-            rulesSize +
-            labelsLen +
-            sizeof(Label) * series->labelsCount + 
-            SeriesGetChunksSize(series);
+    return sizeof(series) + rulesSize + labelsLen + sizeof(Label) * series->labelsCount +
+           SeriesGetChunksSize(series);
 }
 
 size_t SeriesGetNumSamples(const Series *series) {
     size_t numSamples = 0;
-    if (series!=NULL){
+    if (series != NULL) {
         numSamples = series->totalSamples;
     }
     return numSamples;
 }
 
-int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
-    timestamp_t rax_key;
-    if (timestamp <= series->lastTimestamp && series->lastTimestamp != 0) {
-        return TSDB_ERR_TIMESTAMP_TOO_OLD;
-    } else if (timestamp == series->lastTimestamp && timestamp != 0) {
-        return TSDB_ERR_TIMESTAMP_OCCUPIED;
+static void upsertCompaction(Series *series, UpsertCtx *uCtx) {
+    CompactionRule *rule = series->rules;
+    RedisModuleCtx *ctx = RedisModule_GetThreadSafeContext(NULL);
+    while (rule != NULL) {
+        timestamp_t curAggWindowStart = CalcWindowStart(series->lastTimestamp, rule->timeBucket);
+        if (uCtx->sample.timestamp >= curAggWindowStart) {
+            // upsert in latest timebucket
+            int rv = SeriesCalcRange(series, curAggWindowStart, UINT64_MAX, rule, NULL);
+            if (rv == TSDB_ERROR) {
+                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                continue;
+            }
+        } else {
+            timestamp_t start = CalcWindowStart(uCtx->sample.timestamp, rule->timeBucket);
+            // ensure last include/exclude
+            double val = 0;
+            int rv = SeriesCalcRange(series, start, start + rule->timeBucket - 1, rule, &val);
+            if (rv == TSDB_ERROR) {
+                RedisModule_Log(ctx, "verbose", "%s", "Failed to calculate range for downsample");
+                continue;
+            }
+
+            RedisModuleKey *key;
+            Series *destSeries;
+            if (!GetSeries(ctx, rule->destKey, &key, &destSeries, REDISMODULE_READ)) {
+                RedisModule_Log(ctx, "verbose", "%s", "Failed to retrieve downsample series");
+                continue;
+            }
+            SeriesUpsertSample(destSeries, start, val);
+            RedisModule_CloseKey(key);
+        }
+        rule = rule->nextRule;
     }
-    Sample sample = {.timestamp = timestamp, .value = value};
-    int ret = series->funcs->AddSample(series->lastChunk, &sample);
+    RedisModule_FreeThreadSafeContext(ctx);
+}
+
+int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value) {
+    bool latestChunk = true;
+    void *chunkKey = NULL;
+    ChunkFuncs *funcs = series->funcs;
+    Chunk_t *chunk = series->lastChunk;
+    timestamp_t chunkFirstTS = funcs->GetFirstTimestamp(series->lastChunk);
+
+    if (timestamp < chunkFirstTS && RedisModule_DictSize(series->chunks) > 1) {
+        // Upsert in an older chunk
+        latestChunk = false;
+        timestamp_t rax_key;
+        seriesEncodeTimestamp(&rax_key, timestamp);
+        RedisModuleDictIter *dictIter =
+            RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+        chunkKey = RedisModule_DictNextC(dictIter, NULL, (void *)&chunk);
+        RedisModule_DictIteratorStop(dictIter);
+        if (chunkKey == NULL) {
+            return REDISMODULE_ERR;
+        }
+        chunkFirstTS = funcs->GetFirstTimestamp(chunk);
+    }
+
+    // Split chunks
+    if (funcs->GetChunkSize(chunk, false) >
+        series->maxSamplesPerChunk * sizeof(Sample) * SPLIT_FACTOR) {
+        Chunk_t *newChunk = funcs->SplitChunk(chunk);
+        if (newChunk == NULL) {
+            return REDISMODULE_ERR;
+        }
+        timestamp_t newChunkFirstTS = funcs->GetFirstTimestamp(newChunk);
+        dictOperator(series->chunks, newChunk, newChunkFirstTS, DICT_OP_SET);
+        if (timestamp >= newChunkFirstTS) {
+            chunk = newChunk;
+            chunkFirstTS = newChunkFirstTS;
+        }
+        if (latestChunk) { // split of latest chunk
+            series->lastChunk = newChunk;
+        }
+    }
+
+    Sample sample = { .timestamp = timestamp, .value = value };
+    UpsertCtx uCtx = {
+        .inChunk = chunk,
+        .sample = sample,
+    };
+
+    int size = 0;
+    ChunkResult rv = funcs->UpsertSample(&uCtx, &size);
+    if (rv == CR_OK) {
+        series->totalSamples += size;
+        if (timestamp == series->lastTimestamp) {
+            series->lastValue = value;
+        }
+        timestamp_t chunkFirstTSAfterOp = funcs->GetFirstTimestamp(uCtx.inChunk);
+        if (chunkFirstTSAfterOp != chunkFirstTS) {
+            // update chunk in dictionary if first timestamp changed
+            if (dictOperator(series->chunks, NULL, chunkFirstTS, DICT_OP_DEL) == REDISMODULE_ERR) {
+                dictOperator(series->chunks, NULL, 0, DICT_OP_DEL);
+            }
+            dictOperator(series->chunks, uCtx.inChunk, chunkFirstTSAfterOp, DICT_OP_SET);
+        }
+
+        upsertCompaction(series, &uCtx);
+    }
+    return rv;
+}
+
+int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
+    // backfilling or update
+    Sample sample = { .timestamp = timestamp, .value = value };
+    ChunkResult ret = series->funcs->AddSample(series->lastChunk, &sample);
+
     if (ret == CR_END) {
         // When a new chunk is created trim the series
         SeriesTrim(series);
 
         Chunk_t *newChunk = series->funcs->NewChunk(series->maxSamplesPerChunk);
-        seriesEncodeTimestamp(&rax_key, timestamp);
-        RedisModule_DictSetC(series->chunks, &rax_key, sizeof(rax_key), (void*)newChunk);
-        series->funcs->AddSample(newChunk, &sample);
+        dictOperator(series->chunks, newChunk, timestamp, DICT_OP_SET);
+        ret = series->funcs->AddSample(newChunk, &sample);
         series->lastChunk = newChunk;
     }
     series->lastTimestamp = timestamp;
@@ -225,113 +352,129 @@ int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value) {
     return TSDB_OK;
 }
 
-int SeriesQuery(Series *series, SeriesIterator *iter, 
-                            api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp) {
+// Initiates SeriesIterator, find the correct chunk and initiate a ChunkIterator
+SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev) {
+    SeriesIterator iter = { 0 };
+    iter.series = series;
+    iter.minTimestamp = start_ts;
+    iter.maxTimestamp = end_ts;
+    iter.reverse = rev;
+
     timestamp_t rax_key;
-    iter->series = series;
-    ChunkFuncs *funcs = iter->series->funcs;
-    
-    // get the rightmost chunk whose base timestamp is smaller or equal to minTimestamp
-    seriesEncodeTimestamp(&rax_key, minTimestamp);
-    iter->dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
-    
-    // iterate to the first relevant chunk
-    void *dictResult = RedisModule_DictNextC(iter->dictIter, NULL, (void*)&iter->currentChunk);
-    while (dictResult) {
-        if (funcs->GetLastTimestamp(iter->currentChunk) < minTimestamp) {
-            dictResult = RedisModule_DictNextC(iter->dictIter, NULL, (void*)&iter->currentChunk);
-        } else {
-            iter->chunkIterator = funcs->NewChunkIterator(iter->currentChunk);
-            iter->minTimestamp = minTimestamp;
-            iter->maxTimestamp = maxTimestamp;
-            return REDISMODULE_OK;
-        }
-    }
-    SeriesIteratorClose(iter);
-    return REDISMODULE_ERR;
-}
+    ChunkFuncs *funcs = series->funcs;
 
-ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample) {
-    ChunkFuncs *funcs = iterator->series->funcs;
-    ChunkResult res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
-
-    if (funcs->GetNumOfSample(iterator->currentChunk) == 0) {
-        return CR_END;
+    if (iter.reverse == false) {
+        iter.GetNext = funcs->ChunkIteratorGetNext;
+        iter.DictGetNext = RedisModule_DictNextC;
+        seriesEncodeTimestamp(&rax_key, iter.minTimestamp);
+    } else {
+        iter.GetNext = funcs->ChunkIteratorGetPrev;
+        iter.DictGetNext = RedisModule_DictPrevC;
+        seriesEncodeTimestamp(&rax_key, iter.maxTimestamp);
     }
 
-    // Skip through initial samples
-    while (res == CR_OK && sample->timestamp < iterator->minTimestamp) {     
-        res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, sample);
+    // get first chunk within query range
+    iter.dictIter = RedisModule_DictIteratorStartC(series->chunks, "<=", &rax_key, sizeof(rax_key));
+    if (!iter.DictGetNext(iter.dictIter, NULL, (void *)&iter.currentChunk)) {
+        RedisModule_DictIteratorReseekC(iter.dictIter, "^", NULL, 0);
+        iter.DictGetNext(iter.dictIter, NULL, (void *)&iter.currentChunk);
     }
 
-    // No sample within range
-    if (res != CR_OK || sample->timestamp > iterator->maxTimestamp) {
-        return CR_END;   
-    } 
-    return CR_OK;
+    iter.chunkIterator = funcs->NewChunkIterator(iter.currentChunk, iter.reverse);
+    return iter;
 }
 
 void SeriesIteratorClose(SeriesIterator *iterator) {
-    if (iterator->chunkIterator != NULL)
-        iterator->series->funcs->FreeChunkIterator(iterator->chunkIterator);
-    if (iterator->dictIter != NULL)
-        RedisModule_DictIteratorStop(iterator->dictIter);
-    *iterator = (SeriesIterator){ 0 };
+    iterator->series->funcs->FreeChunkIterator(iterator->chunkIterator, iterator->reverse);
+    RedisModule_DictIteratorStop(iterator->dictIter);
 }
 
+// Fills sample from chunk. If all samples were extracted from the chunk, we
+// move to the next chunk.
 ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample) {
-    Chunk_t *currentChunk = iterator->currentChunk;
+    ChunkResult res;
     ChunkFuncs *funcs = iterator->series->funcs;
+    Chunk_t *currentChunk = iterator->currentChunk;
 
-    ChunkResult res = funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
-    if (res == CR_END) { // Reached the end of the chunk
-        if (!RedisModule_DictNextC(iterator->dictIter, NULL, (void*)&iterator->currentChunk) ||
-            funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp) {
-            return CR_END;       // No more chunks or they out of range
+    while (true) {
+        res = iterator->GetNext(iterator->chunkIterator, currentSample);
+        if (res == CR_END) { // Reached the end of the chunk
+            if (!iterator->DictGetNext(iterator->dictIter, NULL, (void *)&currentChunk) ||
+                funcs->GetFirstTimestamp(currentChunk) > iterator->maxTimestamp ||
+                funcs->GetLastTimestamp(currentChunk) < iterator->minTimestamp) {
+                return CR_END; // No more chunks or they out of range
+            }
+            funcs->FreeChunkIterator(iterator->chunkIterator, iterator->reverse);
+            iterator->chunkIterator = funcs->NewChunkIterator(currentChunk, iterator->reverse);
+            if (iterator->GetNext(iterator->chunkIterator, currentSample) != CR_OK) {
+                return CR_END;
+            }
         }
-        funcs->FreeChunkIterator(iterator->chunkIterator);
-        iterator->chunkIterator = funcs->NewChunkIterator(iterator->currentChunk);
-        funcs->ChunkIteratorGetNext(iterator->chunkIterator, currentSample);
-    }
 
-    if (currentSample->timestamp > iterator->maxTimestamp) {
-        return CR_END;          // Reach end of range requested
-    } 
+        // check timestamp is within range
+        if (!iterator->reverse) {
+            // forward range handling
+            if (currentSample->timestamp < iterator->minTimestamp) {
+                // didn't reach the starting point of the requested range
+                continue;
+            }
+            if (currentSample->timestamp > iterator->maxTimestamp) {
+                // reached the end of the requested range
+                return CR_END;
+            }
+        } else {
+            // reverse range handling
+            if (currentSample->timestamp > iterator->maxTimestamp) {
+                // didn't reach our starting range
+                continue;
+            }
+            if (currentSample->timestamp < iterator->minTimestamp) {
+                // didn't reach the starting point of the requested range
+                return CR_END;
+            }
+        }
+        return CR_OK;
+    }
     return CR_OK;
 }
 
-CompactionRule *SeriesAddRule(Series *series, RedisModuleString *destKeyStr, int aggType, uint64_t timeBucket) {
+CompactionRule *SeriesAddRule(Series *series,
+                              RedisModuleString *destKeyStr,
+                              int aggType,
+                              uint64_t timeBucket) {
     CompactionRule *rule = NewRule(destKeyStr, aggType, timeBucket);
-    if (rule == NULL ) {
+    if (rule == NULL) {
         return NULL;
     }
-    if (series->rules == NULL){
+    if (series->rules == NULL) {
         series->rules = rule;
     } else {
         CompactionRule *last = series->rules;
-        while(last->nextRule != NULL) last = last->nextRule;
+        while (last->nextRule != NULL)
+            last = last->nextRule;
         last->nextRule = rule;
     }
     return rule;
 }
 
-int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *keyName, Series *series,
-        Label *labels, size_t labelsCount) {
+int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx,
+                                      RedisModuleString *keyName,
+                                      Series *series,
+                                      Label *labels,
+                                      size_t labelsCount) {
     size_t len;
     int i;
     Series *compactedSeries;
     RedisModuleKey *compactedKey;
     size_t compactedRuleLabelCount = labelsCount + 2;
 
-    for (i=0; i<TSGlobalConfig.compactionRulesCount; i++) {
-        SimpleCompactionRule* rule = TSGlobalConfig.compactionRules + i;
+    for (i = 0; i < TSGlobalConfig.compactionRulesCount; i++) {
+        SimpleCompactionRule *rule = TSGlobalConfig.compactionRules + i;
         const char *aggString = AggTypeEnumToString(rule->aggType);
-        RedisModuleString* destKey = RedisModule_CreateStringPrintf(ctx, "%s_%s_%ld",
-                                            RedisModule_StringPtrLen(keyName, &len),
-                                            aggString,
-                                            rule->timeBucket);
+        RedisModuleString *destKey = RedisModule_CreateStringPrintf(
+            ctx, "%s_%s_%ld", RedisModule_StringPtrLen(keyName, &len), aggString, rule->timeBucket);
         RedisModule_RetainString(ctx, destKey);
-        compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ|REDISMODULE_WRITE);
+        compactedKey = RedisModule_OpenKey(ctx, destKey, REDISMODULE_READ | REDISMODULE_WRITE);
         if (RedisModule_KeyType(compactedKey) != REDISMODULE_KEYTYPE_EMPTY) {
             // TODO: should we break here? Is log enough?
             RM_LOG_WARNING(ctx, "Cannot create compacted key, key '%s' already exists", destKey);
@@ -342,78 +485,123 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
 
         Label *compactedLabels = malloc(sizeof(Label) * compactedRuleLabelCount);
         // todo: deep copy labels function
-        for (int l=0; l<labelsCount; l++){
+        for (int l = 0; l < labelsCount; l++) {
             compactedLabels[l].key = RedisModule_CreateStringFromString(NULL, labels[l].key);
             compactedLabels[l].value = RedisModule_CreateStringFromString(NULL, labels[l].value);
         }
 
         // For every aggregated key create 2 labels: `aggregation` and `time_bucket`.
         compactedLabels[labelsCount].key = RedisModule_CreateStringPrintf(NULL, "aggregation");
-        compactedLabels[labelsCount].value = RedisModule_CreateString(NULL, aggString, strlen(aggString));
-        compactedLabels[labelsCount+1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");
-        compactedLabels[labelsCount+1].value = RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
+        compactedLabels[labelsCount].value =
+            RedisModule_CreateString(NULL, aggString, strlen(aggString));
+        compactedLabels[labelsCount + 1].key = RedisModule_CreateStringPrintf(NULL, "time_bucket");
+        compactedLabels[labelsCount + 1].value =
+            RedisModule_CreateStringPrintf(NULL, "%ld", rule->timeBucket);
 
-        CreateTsKey(ctx, destKey, compactedLabels, compactedRuleLabelCount, rule->retentionSizeMillisec,
-                TSGlobalConfig.maxSamplesPerChunk, TSGlobalConfig.options & SERIES_OPT_UNCOMPRESSED,
-                &compactedSeries, &compactedKey);
+        CreateTsKey(ctx,
+                    destKey,
+                    compactedLabels,
+                    compactedRuleLabelCount,
+                    rule->retentionSizeMillisec,
+                    TSGlobalConfig.maxSamplesPerChunk,
+                    TSGlobalConfig.options & SERIES_OPT_UNCOMPRESSED,
+                    &compactedSeries,
+                    &compactedKey);
         RedisModule_CloseKey(compactedKey);
     }
     return TSDB_OK;
 }
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket) {
-    if (timeBucket <= 0) {
+    if (timeBucket == 0ULL) {
         return NULL;
     }
 
     CompactionRule *rule = (CompactionRule *)malloc(sizeof(CompactionRule));
-    rule->aggClass = GetAggClass(aggType);;
+    rule->aggClass = GetAggClass(aggType);
+    ;
     rule->aggType = aggType;
     rule->aggContext = rule->aggClass->createContext();
     rule->timeBucket = timeBucket;
     rule->destKey = destKey;
     rule->startCurrentTimeBucket = -1LL;
-
     rule->nextRule = NULL;
 
     return rule;
 }
 
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey) {
-	CompactionRule *rule = series->rules;
-	CompactionRule *prev_rule = NULL;
-	while (rule != NULL) {
-		if (RMUtil_StringEquals(rule->destKey, destKey)) {
+    CompactionRule *rule = series->rules;
+    CompactionRule *prev_rule = NULL;
+    while (rule != NULL) {
+        if (RMUtil_StringEquals(rule->destKey, destKey)) {
             CompactionRule *next = rule->nextRule;
             FreeCompactionRule(rule);
-			if (prev_rule != NULL) {
-			     // cut off the current rule from the linked list
-			     prev_rule->nextRule = next;
-			}  else {
-			    // make the next one to be the first rule
-			    series->rules = next;
-			}
-			return TRUE;
-		}
-		prev_rule = rule;
-		rule = rule->nextRule;
-	}
-	return FALSE;
+            if (prev_rule != NULL) {
+                // cut off the current rule from the linked list
+                prev_rule->nextRule = next;
+            } else {
+                // make the next one to be the first rule
+                series->rules = next;
+            }
+            return TRUE;
+        }
+        prev_rule = rule;
+        rule = rule->nextRule;
+    }
+    return FALSE;
 }
 
 int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey) {
-	if(series->srcKey){
-		return FALSE;
-	}
-	series->srcKey = srctKey;
-	return TRUE;
+    if (series->srcKey) {
+        return FALSE;
+    }
+    series->srcKey = srctKey;
+    return TRUE;
 }
 
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey) {
-	if(RMUtil_StringEquals(series->srcKey, srctKey)){
-		RedisModule_FreeString(NULL, series->srcKey);
-		series->srcKey = NULL;
-		return TRUE;
-	}
-	return FALSE;
+    if (RMUtil_StringEquals(series->srcKey, srctKey)) {
+        RedisModule_FreeString(NULL, series->srcKey);
+        series->srcKey = NULL;
+        return TRUE;
+    }
+    return FALSE;
+}
+
+/*
+ * This function calculate aggregation value of a range.
+ *
+ * If `val` is NULL, the function will update the context of `rule`.
+ */
+int SeriesCalcRange(Series *series,
+                    timestamp_t start_ts,
+                    timestamp_t end_ts,
+                    CompactionRule *rule,
+                    double *val) {
+    AggregationClass *aggObject = rule->aggClass;
+
+    Sample sample = { 0 };
+    SeriesIterator iterator = SeriesQuery(series, start_ts, end_ts, false);
+    if (iterator.series == NULL) {
+        return TSDB_ERROR;
+    }
+    void *context = aggObject->createContext();
+
+    while (SeriesIteratorGetNext(&iterator, &sample) == CR_OK) {
+        aggObject->appendValue(context, sample.value);
+    }
+    SeriesIteratorClose(&iterator);
+    if (val == NULL) { // just update context for current window
+        aggObject->freeContext(rule->aggContext);
+        rule->aggContext = context;
+    } else {
+        *val = aggObject->finalize(context);
+        aggObject->freeContext(context);
+    }
+    return TSDB_OK;
+}
+
+timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window) {
+    return timestamp - (timestamp % window);
 }

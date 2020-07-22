@@ -5,7 +5,7 @@
 [![codecov](https://codecov.io/gh/RedisTimeSeries/RedisTimeSeries/branch/master/graph/badge.svg)](https://codecov.io/gh/RedisTimeSeries/RedisTimeSeries)
 
 # RedisTimeSeries
-[![Mailing List](https://img.shields.io/badge/Mailing%20List-RedisTimeSeries-blue)](https://groups.google.com/forum/#!forum/redistimeseries)
+[![Forum](https://img.shields.io/badge/Forum-RedisTimeSeries-blue)](https://forum.redislabs.com/c/modules/redistimeseries)
 [![Gitter](https://badges.gitter.im/RedisLabs/RedisTimeSeries.svg)](https://gitter.im/RedisLabs/RedisTimeSeries?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
@@ -126,11 +126,16 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | Project | Language | License | Author | URL |
 | ------- | -------- | ------- | ------ | --- |
 | JRedisTimeSeries | Java | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/JRedisTimeSeries/) |
+| redis-modules-java | Java | Apache-2 | [dengliming](https://github.com/dengliming) | [Github](https://github.com/dengliming/redis-modules-java) |
 | redistimeseries-go | Go | Apache-2 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-go) |
 | redistimeseries-py | Python | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-py) |
+| NRedisTimeSeries | .NET | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/NRedisTimeSeries) |
 | phpRedisTimeSeries | PHP | MIT | [Alessandro Balasco](https://github.com/palicao) | [Github](https://github.com/palicao/phpRedisTimeSeries) |
 | redis-time-series | JavaScript | MIT | [Rafa Campoy](https://github.com/averias) | [Github](https://github.com/averias/redis-time-series) |
 | redistimeseries-js | JavaScript | MIT | [Milos Nikolovski](https://github.com/nikolovskimilos) | [Github](https://github.com/nikolovskimilos/redistimeseries-js) |
+| redis_ts | Rust | BSD-3 | [Thomas Profelt](https://github.com/tompro) | [Github](https://github.com/tompro/redis_ts) |
+| redistimeseries | Ruby | MIT | [Eaden McKee](https://github.com/eadz) | [Github](https://github.com/eadz/redistimeseries) |
+| redis-time-series | Ruby | MIT | [Matt Duszynski](https://github.com/dzunk) | [Github](https://github.com/dzunk/redis-time-series) |
 
 ## Tests
 Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
@@ -144,7 +149,7 @@ $ make tests
 Read the docs at http://redistimeseries.io
 
 ## Mailing List / Forum
-Got questions? Feel free to ask at the [RedisTimeSeries mailing list](https://groups.google.com/forum/#!forum/redistimeseries).
+Got questions? Feel free to ask at the [RedisTimeSeries forum](https://forum.redislabs.com/c/modules/redistimeseries).
 
 ## License
 Redis Source Available License Agreement, see [LICENSE](LICENSE)

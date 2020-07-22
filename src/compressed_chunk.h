@@ -13,23 +13,26 @@
 #include "generic_chunk.h"
 
 // Initialize compressed chunk
-Chunk_t *Compressed_NewChunk(u_int64_t size);
+Chunk_t *Compressed_NewChunk(size_t size);
 void Compressed_FreeChunk(Chunk_t *chunk);
+Chunk_t *Compressed_SplitChunk(Chunk_t *chunk);
 
 // Append a sample to a compressed chunk
 ChunkResult Compressed_AddSample(Chunk_t *chunk, Sample *sample);
+ChunkResult Compressed_UpsertSample(UpsertCtx *uCtx, int *size);
 
 // Read from compressed chunk using an iterator
-ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk);
+ChunkIter_t *Compressed_NewChunkIterator(Chunk_t *chunk, bool rev);
 ChunkResult Compressed_ChunkIteratorGetNext(ChunkIter_t *iter, Sample* sample);
+void Compressed_FreeChunkIterator(ChunkIter_t *iter, bool freeChunk);
 
 // Miscellaneous
-size_t Compressed_GetChunkSize(const Chunk_t *chunk);
+size_t Compressed_GetChunkSize(const Chunk_t *chunk, bool includeStruct);
 u_int64_t Compressed_ChunkNumOfSample (const Chunk_t *chunk);
 timestamp_t Compressed_GetFirstTimestamp(const Chunk_t *chunk);
 timestamp_t Compressed_GetLastTimestamp (const Chunk_t *chunk);
 
 /* Used in tests */
-u_int64_t getIterIdx(Chunk_t *iter);
+u_int64_t getIterIdx(ChunkIter_t *iter);
 
 #endif // COMPRESSED_CHUNK_H

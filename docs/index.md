@@ -1,7 +1,7 @@
 <img src="images/logo.svg" alt="logo" width="200"/>
 
 # RedisTimeSeries
-[![Mailing List](https://img.shields.io/badge/Mailing%20List-RedisTimeSeries-blue)](https://groups.google.com/forum/#!forum/redistimeseries)
+[![Forum](https://img.shields.io/badge/Forum-RedisTimeSeries-blue)](https://forum.redislabs.com/c/modules/redistimeseries)
 [![Gitter](https://badges.gitter.im/RedisLabs/RedisTimeSeries.svg)](https://gitter.im/RedisLabs/RedisTimeSeries?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 RedisTimeSeries is a Redis Module adding a Time Series data structure to Redis.
@@ -34,12 +34,29 @@ Each sample is a tuple of the time and the value of 128 bits,
 
 ## Setup
 
-You can either get RedisTimeSeries setup in a Docker container or on your own machine.
+You can either get RedisTimeSeries setup in the cloud, in a Docker container or on your own machine.
+
+### Redis Cloud
+
+RedisTimeSeries is available on all Redis Cloud managed services.  Redis Cloud Essentials offers a completely free managed databbases up to 30MB.
+
+[Get started here](https://redislabs.com/try-free/)
+
 
 ### Docker
 To quickly try out RedisTimeSeries, launch an instance using docker:
 ```sh
 docker run -p 6379:6379 -it --rm redislabs/redistimeseries
+```
+
+### Download and running binaries
+
+First download the pre-compiled version from [RedisLabs download center](https://redislabs.com/download-center/modules/).
+
+Next, run Redis with RedisTimeSeries: 
+
+```
+$ redis-server --loadmodule /path/to/module/redistimeseries.so
 ```
 
 ### Build and Run it yourself
@@ -102,6 +119,7 @@ After you create the time series, you can send temperature measurements.
 Then you can query the data for a time range on some aggregation rule.
 
 ### With `redis-cli`
+
 ```sh
 $ redis-cli
 127.0.0.1:6379> TS.CREATE temperature:3:11 RETENTION 6000 LABELS sensor_id 2 area_id 32
@@ -124,13 +142,17 @@ Some languages have client libraries that provide support for RedisTimeSeries co
 | Project | Language | License | Author | URL |
 | ------- | -------- | ------- | ------ | --- |
 | JRedisTimeSeries | Java | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/JRedisTimeSeries/) |
+| redis-modules-java | Java | Apache-2 | [dengliming](https://github.com/dengliming) | [Github](https://github.com/dengliming/redis-modules-java) |
 | redistimeseries-go | Go | Apache-2 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-go) |
 | redistimeseries-py | Python | BSD-3 | [RedisLabs](https://redislabs.com/) | [Github](https://github.com/RedisTimeSeries/redistimeseries-py) |
 | phpRedisTimeSeries | PHP | MIT | [Alessandro Balasco](https://github.com/palicao) | [Github](https://github.com/palicao/phpRedisTimeSeries) |
 | redis-time-series | JavaScript | MIT | [Rafa Campoy](https://github.com/averias) | [Github](https://github.com/averias/redis-time-series) |
 | redistimeseries-js | JavaScript | MIT | [Milos Nikolovski](https://github.com/nikolovskimilos) | [Github](https://github.com/nikolovskimilos/redistimeseries-js) |
+| redis_ts | Rust | BSD-3 | [Thomas Profelt](https://github.com/tompro) | [Github](https://github.com/tompro/redis_ts) |
+| redistimeseries | Ruby | MIT | [Eaden McKee](https://github.com/eadz) | [Github](https://github.com/eadz/redistimeseries) |
 
 ## Tests
+
 Tests are written in python using the [rmtest](https://github.com/RedisLabs/rmtest) library.
 ```
 $ cd src
@@ -140,7 +162,7 @@ $ make tests
 
 ## Mailing List / Forum
 
-Got questions? Feel free to ask at the [RedisTimeSeries mailing list](https://groups.google.com/forum/#!forum/redistimeseries).
+Got questions? Feel free to ask at the [RedisTimeSeries mailing list](https://forum.redislabs.com/c/modules/redistimeseries).
 
 ## License
 

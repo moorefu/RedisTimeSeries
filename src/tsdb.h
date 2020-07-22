@@ -46,15 +46,20 @@ typedef struct SeriesIterator {
     ChunkIter_t *chunkIterator;
     api_timestamp_t maxTimestamp;
     api_timestamp_t minTimestamp;
+    bool reverse;
+    ChunkResult(*GetNext)(ChunkIter_t *iter, Sample *sample);
+    void *(*DictGetNext)(RedisModuleDictIter *di, size_t *keylen, void **dataptr);
 } SeriesIterator;
 
 Series *NewSeries(RedisModuleString *keyName, Label *labels, size_t labelsCount,
-                uint64_t retentionTime, short maxSamplesPerChunk, int uncompressed);
+                uint64_t retentionTime, short maxSamplesPerChunk, int options);
 void FreeSeries(void *value);
 void CleanLastDeletedSeries(RedisModuleCtx *ctx, RedisModuleString *key);
 void FreeCompactionRule(void *value);
 size_t SeriesMemUsage(const void *value);
 int SeriesAddSample(Series *series, api_timestamp_t timestamp, double value);
+int SeriesUpsertSample(Series *series, api_timestamp_t timestamp, double value);
+int SeriesUpdateLastSample(Series *series);
 int SeriesDeleteRule(Series *series, RedisModuleString *destKey);
 int SeriesSetSrcRule(Series *series, RedisModuleString *srctKey);
 int SeriesDeleteSrcRule(Series *series, RedisModuleString *srctKey);
@@ -64,10 +69,18 @@ int SeriesCreateRulesFromGlobalConfig(RedisModuleCtx *ctx, RedisModuleString *ke
 size_t SeriesGetNumSamples(const Series *series);
 
 // Iterator over the series
-int SeriesQuery(Series *series, SeriesIterator *iter, api_timestamp_t minTimestamp, api_timestamp_t maxTimestamp);
+SeriesIterator SeriesQuery(Series *series, timestamp_t start_ts, timestamp_t end_ts, bool rev);
 ChunkResult SeriesIteratorGetNext(SeriesIterator *iterator, Sample *currentSample);
-ChunkResult SeriesIteratorGetFirst(SeriesIterator *iterator, Sample *sample);
 void SeriesIteratorClose(SeriesIterator *iterator);
+
+int SeriesCalcRange(Series *series,
+                    timestamp_t start_ts,
+                    timestamp_t end_ts,
+                    CompactionRule * rule,
+                    double *val);
+                    
+// Calculate the begining of  aggregation window
+timestamp_t CalcWindowStart(timestamp_t timestamp, size_t window);
 
 CompactionRule *NewRule(RedisModuleString *destKey, int aggType, uint64_t timeBucket);
 #endif /* TSDB_H */

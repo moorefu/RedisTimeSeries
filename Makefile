@@ -1,5 +1,8 @@
 
 ROOT=.
+ifeq ($(wildcard $(ROOT)/deps/readies/mk),)
+$(error Submodules not present. Please run 'git submodule update --init --recursive')
+endif
 include $(ROOT)/deps/readies/mk/main
 
 MK_CUSTOM_CLEAN=1
@@ -16,6 +19,7 @@ help:
 	@$(MAKE) -C src help
 
 setup:
+	@echo Setting up system...
 	@./deps/readies/bin/getpy2
 	@./system-setup.py
 
@@ -27,6 +31,9 @@ build:
 
 clean:
 	@$(MAKE) -C src clean
+
+format:
+	@$(MAKE) -C src format
 
 test:
 	@$(MAKE) -C src tests

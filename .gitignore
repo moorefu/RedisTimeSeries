@@ -1,6 +1,8 @@
 *.o
 *.so
 *.xml
+*.pyc
+*.log
 .vscode/
 __pycache__
 .cproject
@@ -15,3 +17,4 @@ venv/
 /VARIANT
 /BINDIR
 /tests/tests_report.xml
+site/

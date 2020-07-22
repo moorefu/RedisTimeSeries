@@ -67,6 +67,7 @@ CC_FLAGS = \
 	-MMD -MF $(@:.o=.d) \
 	-include $(SRCDIR)/common.h \
 	-DREDIS_MODULE_TARGET \
+	-DREDISTIMESERIES_GIT_SHA=\"$(GIT_SHA)\" \
 	-DREDISMODULE_EXPERIMENTAL_API
 
 LD_FLAGS += 
@@ -130,6 +131,16 @@ rmutil:
 	$(SHOW)$(MAKE) -C $(ROOT)/build/rmutil
 
 $(LIBRMUTIL): rmutil
+
+docker_lint:
+	docker build -t llvm-toolset -f llvm.Dockerfile .
+	docker run --rm -w /code/src -v `pwd`/..:/code llvm-toolset make lint
+
+lint:
+	clang-format -Werror -n $(SOURCES)
+
+format:
+	clang-format -i $(SOURCES)
 
 clean:
 	-$(SHOW)[ -e $(BINDIR) ] && find $(BINDIR) -name '*.[oadh]' -type f -delete
@@ -248,7 +259,7 @@ coverage:
 #   INTO: package destination directory (optinal)
 
 define ramp_pack # (1=tag, 2=subdir)
-$(SHOW)ramp pack -m $(ROOT)/ramp.yml -o $(BINROOT)/redistimeseries.{os}-{architecture}.$1.zip $(abspath $(TARGET)) 2> /dev/null | grep '.zip' > /tmp/ramp_output
+$(SHOW) python -m RAMP.ramp pack -m $(ROOT)/ramp.yml -o $(BINROOT)/redistimeseries.{os}-{architecture}.$1.zip $(abspath $(TARGET)) 2> /dev/null | grep '.zip' > /tmp/ramp_output
 $(SHOW). $(ROOT)/deps/readies/shibumi/functions; realpath `tail -1 /tmp/ramp_output` > $(BINROOT)/../PACKAGE.$(1)
 $(SHOW)$(ROOT)/src/clean_ramp.py `cat $(BINROOT)/../PACKAGE.$(1)`
 $(SHOW)if [ ! -z "$(INTO)" ]; then { mkdir -p $(INTO)/$(2); cp `cat $(BINROOT)/../PACKAGE.$(1)` $(INTO)/$(2); }; fi
