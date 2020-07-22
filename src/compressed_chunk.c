@@ -159,7 +159,7 @@ timestamp_t Compressed_GetLastTimestamp(const Chunk_t *chunk) {
 }
 
 size_t Compressed_GetChunkSize(const Chunk_t *chunk, bool includeStruct) {
-    CompressedChunk *cmpChunk = chunk;
+    const CompressedChunk *cmpChunk = chunk;
     size_t size = cmpChunk->size * sizeof(char);
     size += includeStruct ? sizeof(*cmpChunk) : 0;
     return size;
