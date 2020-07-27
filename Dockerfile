@@ -1,9 +1,9 @@
 # BUILD redisfab/redistimeseries:${VERSION}-${ARCH}-${OSNICK}
 
-ARG REDIS_VER=6.0.5
+ARG REDIS_VER=5.0.8
 
 # stretch|bionic|buster
-ARG OSNICK=buster
+ARG OSNICK=centos7
 
 # ARCH=x64|arm64v8|arm32v7
 ARG ARCH=x64
